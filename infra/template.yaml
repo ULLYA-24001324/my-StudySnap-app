@@ -1,0 +1,295 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: StudySnap - AI-powered study assistant
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Architectures:
+      - x86_64
+
+Parameters:
+  AccountId:
+    Type: String
+    Default: !Ref AWS::AccountId
+
+Resources:
+
+  # ─── IAM Role ────────────────────────────────────────────────────────────────
+  AppBedrockRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: StudySnapBedrockRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: BedrockInvokePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource:
+                  - !Sub arn:aws:bedrock:ap-southeast-1:${AWS::AccountId}:inference-profile/global.anthropic.claude-haiku-4-5-20251001-v1:0
+                  - arn:aws:bedrock:ap-southeast-1::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0
+                  - arn:aws:bedrock:::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0
+                  - arn:aws:bedrock:*::foundation-model/amazon.nova-canvas-v1:0
+
+  # ─── API Gateway (image widget only) ─────────────────────────────────────────
+  AppApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      Cors:
+        AllowMethods: "'POST,OPTIONS'"
+        AllowHeaders: "'Content-Type'"
+        AllowOrigin: "'*'"
+
+  # ─── Topic Visual Lambda (buffered, API Gateway) ──────────────────────────────
+  TopicVisualFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: studysnap-topic-visual
+      CodeUri: ../backend/topic_visual/
+      Handler: app.handler
+      Role: !GetAtt AppBedrockRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Events:
+        ApiPost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AppApi
+            Path: /topic-visual
+            Method: POST
+        ApiOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AppApi
+            Path: /topic-visual
+            Method: OPTIONS
+
+  # ─── Bullet Point Summary Lambda (Flask streaming) ────────────────────────────
+  BulletPointSummaryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: studysnap-bullet-point-summary
+      CodeUri: ../backend/bullet_point_summary/
+      Handler: run.sh
+      Role: !GetAtt AppBedrockRole.Arn
+      Timeout: 60
+      MemorySize: 256
+      Layers:
+        - arn:aws:lambda:ap-southeast-1:753240598075:layer:LambdaAdapterLayerX86:27
+      Environment:
+        Variables:
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/bootstrap
+          AWS_LWA_INVOKE_MODE: response_stream
+          PORT: "8080"
+      FunctionUrlConfig:
+        AuthType: NONE
+        InvokeMode: RESPONSE_STREAM
+
+  # ─── Flashcards Lambda (Flask streaming) ─────────────────────────────────────
+  FlashcardsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: studysnap-flashcards
+      CodeUri: ../backend/flashcards/
+      Handler: run.sh
+      Role: !GetAtt AppBedrockRole.Arn
+      Timeout: 60
+      MemorySize: 256
+      Layers:
+        - arn:aws:lambda:ap-southeast-1:753240598075:layer:LambdaAdapterLayerX86:27
+      Environment:
+        Variables:
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/bootstrap
+          AWS_LWA_INVOKE_MODE: response_stream
+          PORT: "8080"
+      FunctionUrlConfig:
+        AuthType: NONE
+        InvokeMode: RESPONSE_STREAM
+
+  # ─── Difficulty Level Tag Lambda (Flask streaming) ────────────────────────────
+  DifficultyLevelTagFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: studysnap-difficulty-level-tag
+      CodeUri: ../backend/difficulty_level_tag/
+      Handler: run.sh
+      Role: !GetAtt AppBedrockRole.Arn
+      Timeout: 60
+      MemorySize: 256
+      Layers:
+        - arn:aws:lambda:ap-southeast-1:753240598075:layer:LambdaAdapterLayerX86:27
+      Environment:
+        Variables:
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/bootstrap
+          AWS_LWA_INVOKE_MODE: response_stream
+          PORT: "8080"
+      FunctionUrlConfig:
+        AuthType: NONE
+        InvokeMode: RESPONSE_STREAM
+
+  # ─── Real World Examples Lambda (Flask streaming) ────────────────────────────
+  RealWorldExamplesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: studysnap-real-world-examples
+      CodeUri: ../backend/real_world_examples/
+      Handler: run.sh
+      Role: !GetAtt AppBedrockRole.Arn
+      Timeout: 60
+      MemorySize: 256
+      Layers:
+        - arn:aws:lambda:ap-southeast-1:753240598075:layer:LambdaAdapterLayerX86:27
+      Environment:
+        Variables:
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/bootstrap
+          AWS_LWA_INVOKE_MODE: response_stream
+          PORT: "8080"
+      FunctionUrlConfig:
+        AuthType: NONE
+        InvokeMode: RESPONSE_STREAM
+
+  # ─── Key Terms Glossary Lambda (Flask streaming) ─────────────────────────────
+  KeyTermsGlossaryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: studysnap-key-terms-glossary
+      CodeUri: ../backend/key_terms_glossary/
+      Handler: run.sh
+      Role: !GetAtt AppBedrockRole.Arn
+      Timeout: 60
+      MemorySize: 256
+      Layers:
+        - arn:aws:lambda:ap-southeast-1:753240598075:layer:LambdaAdapterLayerX86:27
+      Environment:
+        Variables:
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/bootstrap
+          AWS_LWA_INVOKE_MODE: response_stream
+          PORT: "8080"
+      FunctionUrlConfig:
+        AuthType: NONE
+        InvokeMode: RESPONSE_STREAM
+
+  # ─── Estimated Study Time Lambda (Flask streaming) ───────────────────────────
+  EstimatedStudyTimeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: studysnap-estimated-study-time
+      CodeUri: ../backend/estimated_study_time/
+      Handler: run.sh
+      Role: !GetAtt AppBedrockRole.Arn
+      Timeout: 60
+      MemorySize: 256
+      Layers:
+        - arn:aws:lambda:ap-southeast-1:753240598075:layer:LambdaAdapterLayerX86:27
+      Environment:
+        Variables:
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/bootstrap
+          AWS_LWA_INVOKE_MODE: response_stream
+          PORT: "8080"
+      FunctionUrlConfig:
+        AuthType: NONE
+        InvokeMode: RESPONSE_STREAM
+
+  # ─── Interactive Quiz Lambda (Flask streaming chatbot) ───────────────────────
+  InteractiveQuizFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: studysnap-interactive-quiz
+      CodeUri: ../backend/interactive_quiz/
+      Handler: run.sh
+      Role: !GetAtt AppBedrockRole.Arn
+      Timeout: 60
+      MemorySize: 256
+      Layers:
+        - arn:aws:lambda:ap-southeast-1:753240598075:layer:LambdaAdapterLayerX86:27
+      Environment:
+        Variables:
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/bootstrap
+          AWS_LWA_INVOKE_MODE: response_stream
+          PORT: "8080"
+      FunctionUrlConfig:
+        AuthType: NONE
+        InvokeMode: RESPONSE_STREAM
+
+  # ─── S3 Static Website Bucket ────────────────────────────────────────────────
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub studysnap-frontend-${AWS::AccountId}
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: '*'
+            Action: s3:GetObject
+            Resource: !Sub arn:aws:s3:::${FrontendBucket}/*
+
+# ─── Outputs ──────────────────────────────────────────────────────────────────
+Outputs:
+  DiagramApiUrl:
+    Description: API Gateway URL for Topic Visual image generation
+    Value: !Sub https://${AppApi}.execute-api.${AWS::Region}.amazonaws.com/prod
+
+  FlashcardsUrl:
+    Description: Function URL for Flashcards streaming Lambda
+    Value: !GetAtt FlashcardsFunctionUrl.FunctionUrl
+
+  DifficultyLevelTagUrl:
+    Description: Function URL for Difficulty Level Tag streaming Lambda
+    Value: !GetAtt DifficultyLevelTagFunctionUrl.FunctionUrl
+
+  RealWorldExamplesUrl:
+    Description: Function URL for Real World Examples streaming Lambda
+    Value: !GetAtt RealWorldExamplesFunctionUrl.FunctionUrl
+
+  KeyTermsGlossaryUrl:
+    Description: Function URL for Key Terms Glossary streaming Lambda
+    Value: !GetAtt KeyTermsGlossaryFunctionUrl.FunctionUrl
+
+  BulletPointSummaryUrl:
+    Description: Function URL for Bullet Point Summary streaming Lambda
+    Value: !GetAtt BulletPointSummaryFunctionUrl.FunctionUrl
+
+  EstimatedStudyTimeUrl:
+    Description: Function URL for Estimated Study Time streaming Lambda
+    Value: !GetAtt EstimatedStudyTimeFunctionUrl.FunctionUrl
+
+  InteractiveQuizUrl:
+    Description: Function URL for Interactive Quiz streaming Lambda
+    Value: !GetAtt InteractiveQuizFunctionUrl.FunctionUrl
+
+  WebsiteUrl:
+    Description: S3 static website URL
+    Value: !GetAtt FrontendBucket.WebsiteURL
+
+  BucketName:
+    Description: S3 bucket name for frontend
+    Value: !Ref FrontendBucket
