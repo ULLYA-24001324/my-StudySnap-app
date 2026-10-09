@@ -46,7 +46,7 @@ jobs:
             --stack-name studysnap \
             --s3-bucket ${{ secrets.SAM_DEPLOY_BUCKET }} \
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
-            --region ap-southeast-1 \
+            --region ${{ secrets.AWS_REGION }} \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset
 
