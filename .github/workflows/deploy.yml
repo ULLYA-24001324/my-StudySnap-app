@@ -35,20 +35,20 @@ jobs:
         with:
           use-installer: true
 
-      # 5. SAM build
-      - name: SAM build
-        run: sam build --template infra/template.yaml
+      # 5. SAM Build
+- name: SAM build
+  run: sam build --template-file infra/template.yaml
 
-      # 6. SAM deploy
-      - name: SAM deploy
-        run: |
-          sam deploy \
-            --stack-name studysnap \
-            --s3-bucket ${{ secrets.SAM_DEPLOY_BUCKET }} \
-            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
-            --region ${{ secrets.AWS_REGION }} \
-            --no-confirm-changeset \
-            --no-fail-on-empty-changeset
+# 6. SAM Deploy
+- name: SAM deploy
+  run: |
+    sam deploy \
+      --stack-name studysnap \
+      --s3-bucket ${{ secrets.SAM_DEPLOY_BUCKET }} \
+      --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+      --region ${{ secrets.AWS_REGION }} \
+      --no-confirm-changeset \
+      --no-fail-on-empty-changeset
 
       # 7. Read CloudFormation outputs and inject into frontend
       - name: Inject Lambda URLs into frontend
