@@ -8,10 +8,7 @@ Globals:
     Architectures:
       - x86_64
 
-Parameters:
-  AccountId:
-    Type: String
-    Default: !Ref AWS::AccountId
+
 
 Resources:
 
